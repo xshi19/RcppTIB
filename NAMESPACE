@@ -1,0 +1,4 @@
+useDynLib(RcppTIB)
+import(doSNOW, inline, pracma, rARPACK, Rcpp, RcppArmadillo)
+importFrom(Rcpp, evalCpp)
+exportPattern("^[[:alpha:]]+")

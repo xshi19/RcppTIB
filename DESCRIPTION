@@ -1,0 +1,11 @@
+Package: RcppTIB
+Type: Package
+Title: TIB functions using Rcpp
+Version: 1.0
+Date: 2015-06-08
+Author: Xiang Shi
+Maintainer: Xiang Shi <soarshi@gmail.com>
+Description: NA
+License: NA
+Imports: doSNOW, inline, pracma, rARPACK, Rcpp (>= 0.11.5), RcppArmadillo
+LinkingTo: doSNOW, inline, pracma, rARPACK, Rcpp (>= 0.11.5), RcppArmadillo
