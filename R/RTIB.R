@@ -7,7 +7,15 @@ aak2 <- function(h, ord) {
   pad = rep(0, 2 * n)
   Tv = ftm(v[n + 1 - 1:n], c(0, h[1:(n - 1)]))[n + 1 - 1:n]
   hm = fft(fft(c(Tv, pad)) / fft(c(v, pad)), inverse = TRUE) / (3 * n)
-  return(hm[3 * n + 1 - 1:n]) 
+  hm = hm[3 * n + 1 - 1:n]
+    
+  if (all(abs(Im(hm)) < .Machine$double.eps * 1000)) {
+      return (Re(hm))
+  }
+  else {
+    return (hm)
+  }
+  return(hm) 
 }
 
 allpastib <- function(lambda, x, real = TRUE) {
@@ -171,7 +179,8 @@ ams515new <- function(cl) {
               h_ = matrix(rep(h, n), length(h), n), 
               .packages = 'RcppTIB') %dopar% (sc_ * ftm(x_, h_))
   
-  lambda = 0.5 + 0.5 * cos(pi * seq(1, 99, by = 2) / 100);
+  # lambda = 0.5 + 0.5 * cos(pi * seq(1, 99, by = 2) / 100);
+  lambda = fftreduce(h, 50)
   Cl = ir2realtibc(lambda, h);
   hl = realtibir(lambda, Cl, length(h));
   
@@ -464,8 +473,12 @@ fftreduce <- function(h, ord) {
   n = length(h)
   h = c(h, rep(0, n))
   hhat = fft(h[2 * n + 1 - 1:(2 * n)])
-  opts = list(tol = 10* .Machine$double.eps)
-  res = eigs(ffthm, k = ord, n = n, args = hhat, opts = opts)
+  
+  # arpack for eigen values, same as eigs in Matlab
+  options = list(n = n, nev = ord, ncv = min(n, max(2 * ord + 1, 20)),
+                 which = 'LM', tol = 10 * .Machine$double.eps)
+  res = arpack(ffthm, extra = hhat, sym = TRUE, options = options)
+  
   q = qr.Q(qr(res$vectors))
   res = eigen(t(q[1:(n - 1), ]) %*% q[2:n, ])
   lambda = res$values
@@ -549,7 +562,8 @@ hankelsv <- function(h, ord) {
 #   SVD of a Hankel matrix with first column h
 #   m = 5000
 #   n = 100
-#   h = rnorm(m)
+#   # h = rnorm(m)
+#   h = 1 / sqrt(1:m)
 #   unix.time({r1 = hankelsv(h, n)})
 #   unix.time({H = trihankel(h)
 #              r2 = svds(H, n)})
@@ -557,10 +571,13 @@ hankelsv <- function(h, ord) {
   
   n = length(h)
   h = c(h, rep(0, n))
-  hhat = mvfft(matrix(h[2 * n + 1 - 1:(2 * n)]))
-  opts = list(tol = 1000 * .Machine$double.eps)
-  # opts = list(tol = .Machine$double.eps)
-  res = eigs(ffthm, k = ord, n = n, args = hhat, opts = opts)
+  hhat = fft(h[2 * n + 1 - 1:(2 * n)])
+  
+  # arpack for eigen values, same as eigs in Matlab
+  options = list(n = n, nev = ord, ncv = min(n, max(2 * ord + 1, 20)),
+                 which = 'LM', tol = 10 * .Machine$double.eps)
+  res = arpack(ffthm, extra = hhat, sym = TRUE, options = options)
+  
   d = abs(res$values)
   j = order(d, decreasing = TRUE)
   v = qr.Q(qr(res$vectors[, j]))
@@ -834,6 +851,19 @@ sptib <- function(lambda) {
   #   }
   #   
   return(list(M = M, N = N))
+}
+
+sincpoints <- function(n, h = NULL) {
+  if (n == 1) {
+    return(1 / 2)
+  }
+  else {
+    if (is.null(h)) {
+      h = pi / sqrt((n - 1) / 2)
+    }
+    x = 0:(n - 1) - (n - 1) / 2
+    return(1 / (1 + exp(h * x)))
+  }
 }
 
 svd_reduction <- function(ir, ord) {
