@@ -268,7 +268,12 @@ annularsample <- function(r1, r2, n) {
   return(z)
 }
 
-approxcomp <- function(ir, n) {
+approxcomp <- function(ir = NULL, n = 50) {
+  
+  if (is.null(ir)) {
+    ir = 1 / sqrt(1:1e4)
+  }
+  
   # exponentially increase index from 1 to length(ir)
   j = floor(2^((0:10000) / 10000 * log(length(ir)) / log(2)))
   si = cumsum(ir)[j]
@@ -307,7 +312,8 @@ approxcomp <- function(ir, n) {
   lines(xi, type = 'p', col = 'yellow')
   title('different poles')
   legend(0.7, 0.99, c('lambda','mu','nu','xi'), 
-         lty = c(1, 1, 1, 1), col = c('blue', 'red', 'green', 'yellow'))
+         lty = c(1, 1, 1, 1), 
+         col = c('blue', 'red', 'green', 'yellow'))
   
   ymax = max(c(ir[2:length(ir)], 
                hl[2:length(ir)],
@@ -324,6 +330,10 @@ approxcomp <- function(ir, n) {
   lines(hm[2:length(ir)], col = 'red')
   lines(hn[2:length(ir)], col = 'green')
   lines(hx[2:length(ir)], col = 'yellow')
+  title('impluse response')
+  legend(0.7 * length(ir), 0.99 * ymax, 
+         c('ir','lambda','mu','nu','xi'), lty = c(1, 1, 1, 1, 1), 
+         col = c('black', 'blue', 'red', 'green', 'yellow'))
   
   ymax = max(c(si, sl, sm , sn, sx))
   ymin = min(c(si, sl, sm , sn, sx))
@@ -332,14 +342,10 @@ approxcomp <- function(ir, n) {
   lines(j, sm, col = 'red')
   lines(j, sn, col = 'green')
   lines(j, sx, col = 'yellow')
-  
-  ymax = max(c(si, sl, sm , sn, sx))
-  ymin = min(c(si, sl, sm , sn, sx))
-  plot(j, si, type = 'l', col = 'black', ylim = c(ymin, ymax))
-  lines(j, sl, col = 'blue')
-  lines(j, sm, col = 'red')
-  lines(j, sn, col = 'green')
-  lines(j, sx, col = 'yellow')
+  legend(0.7 * length(si), 0.99 * ymax, 
+         c('ir','lambda','mu','nu','xi'), lty = c(1, 1, 1, 1, 1), 
+         col = c('black', 'blue', 'red', 'green', 'yellow'))
+  title('cumulative impluse response')
   
   ymax = max(Re(c(ci, cl, cm , cn)))
   ymin = min(Re(c(ci, cl, cm , cn)))
@@ -347,12 +353,109 @@ approxcomp <- function(ir, n) {
   lines(Re(cl), col = 'blue')
   lines(Re(cm), col = 'red')
   lines(Re(cn), col = 'green')
+  legend(0.7 * length(ci), 0.99 * ymax, 
+         c('ir','lambda','mu','nu'), lty = c(1, 1, 1, 1), 
+         col = c('black', 'blue', 'red', 'green'))
+  title('cepstrum')
   # lines(Re(cx), col = 'yellow')
   
-  sum(abs(cl - ci)^2)
-  sum(abs(cm - ci)^2)
-  sum(abs(cn - ci)^2)
-  sum(abs(cx - ci)^2)
+  c(sum(abs(cl - ci)^2),
+    sum(abs(cm - ci)^2),
+    sum(abs(cn - ci)^2),
+    sum(abs(cx - ci)^2))
+}
+
+approxcomp2 <- function() {
+  d = 16
+  m = 24
+  n = 1e4
+  h = 1 / sqrt(1:n)
+  sv = hankelsv(h[2:n], m)
+  
+  # get the AAK approximation with d poles
+  hd = aak2(h[2:n], d)
+  hd = c(1, Re(hd))
+  
+  # sinc intepolation points
+  lambda = sincpoints(d)
+  
+  # get poles from balanced truncation of h
+  mu = fftreduce(h[2:n], d)
+  
+  # get poles from balanced truncation of the AAK approximation
+  # we use an extra pole to accommodate numerical error in the AAK
+  nu = fftreduce(hd[2:n], d + 1)
+  
+  # get poles from balanced truncation of log h
+  rho = exp(.Machine$double.eps / n - pi / sqrt(n))
+  format(rho, digits = 2^4)
+  hr = h * (rho^(1:length(h) - 1))
+  a = Re(toeplog(hr))
+  xi = fftreduce(a[2:length(a)], d) / rho
+  
+  # get poles from AAK approximation of dilated logarithm
+  rho = exp(log(.Machine$double.eps) / n)
+  format(rho, digits = 2^4)
+  ar = a * (rho^(1:length(a)))
+  ak = aak2(ar[2:length(ar)], d)
+  chi = fftreduce(ak, d + 1)
+  
+  # coefficients for TIB realizations:
+  Cl = ir2realtibc(lambda, h[2:length(h)])
+  Cm = ir2realtibc(mu, h[2:length(h)])
+  Cn = ir2realtibc(nu, h[2:length(h)])
+  Cx = ir2realtibc(xi, h[2:length(h)])
+  Cc = ir2realtibc(chi, h[2:length(h)])
+  
+  # and the impulse responses that correspond:
+  hl = c(1, realtibir(lambda, Cl, length(h) - 1))
+  hm = c(1, realtibir(mu, Cm, length(h) - 1))
+  hn = c(1, realtibir(nu, Cn, length(h) - 1))
+  hx = c(1, realtibir(xi, Cx, length(h) - 1))
+  hc = c(1, realtibir(chi, Cc, length(h) - 1))
+  
+  # compute the power series coefficients for the log transfer functions
+  a = Re(toeplog(h))
+  ad = Re(toeplog(hd))
+  al = Re(toeplog(hl))
+  am = Re(toeplog(hm))
+  an = Re(toeplog(hn))
+  ax = Re(toeplog(hx))
+  ac = Re(toeplog(hc))
+  
+  dist = matrix(0, 6, 3)
+  rownames(dist) = c('AAK', 'Sinc', 'fftreduce', 'AAK poles', 'fftreduce log', 'AAK log')
+  colnames(dist) = c('Info', 'H2', 'H inf')
+  
+  dist[, 1] = c(sqrt(sum((a - ad)^2)), sqrt(sum((a - al)^2)),
+                sqrt(sum((a - am)^2)), sqrt(sum((a - an)^2)),
+                sqrt(sum((a - ax)^2)), sqrt(sum((a - ac)^2)))
+  dist[, 2] = c(sqrt(sum((h - hd)^2)), sqrt(sum((h - hl)^2)),
+                sqrt(sum((h - hm)^2)), sqrt(sum((h - hn)^2)),
+                sqrt(sum((h - hx)^2)), sqrt(sum((h - hc)^2)))
+  dist[, 3] = c(max(abs(h - hd)), max(abs(h - hl)),
+                max(abs(h - hm)), max(abs(h - hn)),
+                max(abs(h - hx)), max(abs(h - hc)))
+  dist
+  
+  cl = makeCluster(2)
+  H = cbind(h - hd, h - hl, h - hm, h - hn, h - hx, h - hc)
+  qq = parhankelsv(H[2:nrow(H), ], m, cl)
+  
+  ymax = max(c(sv$d, qq[[1]]$d, qq[[2]]$d, qq[[3]]$d, qq[[4]]$d, qq[[5]]$d, qq[[6]]$d))
+  ymin = min(c(sv$d, qq[[1]]$d, qq[[2]]$d, qq[[3]]$d, qq[[4]]$d, qq[[5]]$d, qq[[6]]$d))
+  plot(sv$d, log = 'y', type = 'o', col = 'red', ylim = c(ymin, ymax))
+  lines(qq[[1]]$d, log = 'y', type = 'o', col = 'blue')
+  lines(qq[[2]]$d, log = 'y', type = 'o', col = 'green')
+  lines(qq[[3]]$d, log = 'y', type = 'o', col = 'yellow')
+  lines(qq[[4]]$d, log = 'y', type = 'o', col = 'black')
+  lines(qq[[5]]$d, log = 'y', type = 'o', col = 'purple')
+  lines(qq[[6]]$d, log = 'y', type = 'o', col = 'orange')
+  
+  legend(0.7 * length(sv$d), 0.99 * ymax, 
+         c('True', rownames(dist)), lty = c(1, 1, 1, 1, 1, 1, 1), 
+         col = c('red', 'blue', 'green', 'yellow', 'black', 'purple', 'orange'))
+  
 }
 
 ar2ir <- function(a, m) {
@@ -505,7 +608,7 @@ ffthm <- function(x, hhat) {
   xhat = mvfft(as.matrix(x))
   y = mvfft(xhat * as.matrix(hhat), inverse = TRUE) / m
   y = y[m + 1 - 1:n]
-  if (all(abs(Im(y)) < .Machine$double.eps * 1000)) {
+  if (all(abs(Im(y)) < .Machine$double.eps * 10000)) {
     return (Re(y))
   }
   else {
@@ -536,7 +639,7 @@ ftm <- function(x, t, cutoff = 128) {
     y = fft(fft(t) * fft(x), inverse = TRUE) / (m + n)
   }
   y = y[1:n]
-  if (all(abs(Im(y)) < .Machine$double.eps * 1000)) {
+  if (all(abs(Im(y)) < .Machine$double.eps * 10000)) {
     return (Re(y))
   }
   else {
@@ -630,7 +733,7 @@ ir2realtibc <- function(lambda, ir) {
     }
     else {
       ind = 2 * (1:((su2 - 1) / 2))
-      u = u[, ind - 1] + A %*% u[, ind]
+      u = u[, c(1, ind + 1)] + cbind(A %*% u[, ind], 0)
     }
     su2 = ncol(u)
     A = A %*% A
@@ -661,6 +764,14 @@ maxflatresponse <- function(lambda, d, m) {
   mu = -log(lambda)
   y = pgamma(mu * seq(0, m - 1), d, lower = FALSE)
   return(y)
+}
+
+parhankelsv <- function(h, ord, cl) {
+  registerDoSNOW(cl)
+  n = ncol(h)
+  res = foreach(h_ = h, ord_ = rep(ord, n),
+                .packages = 'RcppTIB') %dopar% (hankelsv(h_, ord_))
+  return(res)
 }
 
 realtib <- function(lambda) {
