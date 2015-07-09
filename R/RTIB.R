@@ -438,6 +438,7 @@ approxcomp2 <- function() {
                 max(abs(h - hx)), max(abs(h - hc)))
   dist
   
+  # Compute the first m singular values of the Hankel matrices of differences:
   cl = makeCluster(2)
   H = cbind(h - hd, h - hl, h - hm, h - hn, h - hx, h - hc)
   qq = parhankelsv(H[2:nrow(H), ], m, cl)
@@ -451,11 +452,36 @@ approxcomp2 <- function() {
   lines(qq[[4]]$d, log = 'y', type = 'o', col = 'black')
   lines(qq[[5]]$d, log = 'y', type = 'o', col = 'purple')
   lines(qq[[6]]$d, log = 'y', type = 'o', col = 'orange')
-  
   legend(0.7 * length(sv$d), 0.99 * ymax, 
          c('True', rownames(dist)), lty = c(1, 1, 1, 1, 1, 1, 1), 
          col = c('red', 'blue', 'green', 'yellow', 'black', 'purple', 'orange'))
+  title('Hankel singular values')
   
+  
+  if (n > 1e4) {
+    j = round(2^((1:1e4) / 1e4 * log(n - 1) / log(2))) + 1
+  }
+  else {
+    j = 1:1e4 + 1
+  }
+  
+  # ymax = max(c(h[j], hd[j], hl[j], hm[j], hn[j], hx[j], hc[j]))
+  # ymin = min(c(h[j], hd[j], hl[j], hm[j], hn[j], hx[j], hc[j]))
+  ymax = 10 * max(abs(h[2:length(h)]))
+  ymin = 0.01 * min(abs(h[2:length(h)]))
+  xmax = 1.1 * (n - 1)
+  xmin = 1
+  plot(h[j], log = 'xy', type = 'l', col = 'red', ylim = c(ymin, ymax))
+  lines(hd[j], type = 'l', col = 'blue')
+  lines(hl[j], type = 'l', col = 'green')
+  lines(hm[j], type = 'l', col = 'yellow')
+  lines(hn[j], type = 'l', col = 'black')
+  lines(hx[j], type = 'l', col = 'purple')
+  lines(hc[j], type = 'l', col = 'orange')
+  legend(1, 0.02 * ymax, 
+         c('True', rownames(dist)), lty = c(1, 1, 1, 1, 1, 1, 1), 
+         col = c('red', 'blue', 'green', 'yellow', 'black', 'purple', 'orange'))
+  title('Impluse response')
 }
 
 ar2ir <- function(a, m) {
