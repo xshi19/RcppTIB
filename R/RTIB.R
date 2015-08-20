@@ -1125,11 +1125,7 @@ tibrls <- function(lambda, y, m, draw = FALSE) {
   y = as.vector(y)
   p = length(lambda)
   L = diag(p + 1) * sqrt(var(y[1:60]))
-  # L.sparse = Cholesky(Matrix(diag(p + 1) * var(y[1:60]), sparse = TRUE))
   tib = realtib(lambda)
-  # M = as.matrix(tib$M)
-  # N = as.matrix(tib$N)
-  # U = as.matrix(tib$U)
   z = matrix(0, p, 1)
   
   #   st1 = 0
@@ -1144,12 +1140,10 @@ tibrls <- function(lambda, y, m, draw = FALSE) {
     C = backsolve(t(L[1:p, 1:p]), L[p + 1, 1:p])
     
     z = timestibN(tib$N, tib$U %*% z)
-    # z = N %*% (U %*% z)
     z[1] = z[1] + y[k]
     z = solvetibM(tib$M, z)
-    # z = forwardsolve.cpp(M, z)[[1]]
     #     st2 = st2 + Sys.time() - t
-    if (draw && (mod(k, 100) == 0)) {
+    if (draw && (k %% 100 == 0)) {
       h = realtibir(lambda, C, m)
       plot(h)
     }
@@ -1158,6 +1152,56 @@ tibrls <- function(lambda, y, m, draw = FALSE) {
   v = L[p + 1, p + 1]
   h = realtibir(lambda, C, m)
   return(list(C = C, h = h, v = v))
+}
+
+tibrls_bkt <- function(lambda, y, m, info = FALSE) {
+  # Backtest recursive least squares
+  # The predictions are Cz, CAz, CA^2z....
+  # Num of 'correct' predictions = Num of (sign(perdictions) == sign(y))
+  # Num of 'wrong' predictions = Num of (sign(perdictions) == -sign(y))
+  # Prediction rate = Num of 'correct' / (Num of 'correct' + Num of 'wrong')
+  # m is the number of multi-steps predicitons
+  y = as.vector(y)
+  p = length(lambda)
+  L = diag(p + 1) * sqrt(var(y[1:60]))
+  tib = realtib(lambda)
+  z = matrix(0, p, 1)
+  
+  mu = matrix(0, m, 1)
+  correct = matrix(0, m, 1)
+  wrong = matrix(0, m, 1)
+  
+  for (k in (p + 1):(length(y) - m)) {
+    x = c(z, y[k])
+    L = cholupdate(L, x)
+    C = backsolve(t(L[1:p, 1:p]), L[p + 1, 1:p])
+    
+    z = timestibN(tib$N, tib$U %*% z)
+    z[1] = z[1] + y[k]
+    z = solvetibM(tib$M, z)
+
+    # Ainv = A - BC = M \ N * U
+    # Binv = B = M \ e1
+    # A = Ainv + BC = M \ (N * U + e1 * C)
+    A = timestibN(tib$N, tib$U)
+    A[1, ] = A[1, ] + C
+    A = solvetibM(tib$M, A)
+    Ap = diag(p)
+    for (j in 1:m) {
+      mu[j] = Re(t(C) %*% Ap %*% z)
+      Ap = Ap %*% A 
+    }
+    g = sign(cumsum(mu)) * sign(cumsum(y[k + (1:m)]))
+    correct[g == 1] = correct[g == 1] + 1
+    wrong[g == -1] = wrong[g == -1] + 1
+    
+    if (info && (k %% 100 == 0)) {
+      print(k / 100)
+      print(correct / (correct + wrong))
+    }
+  }
+  rate = correct / (correct + wrong)
+  return(list(rate = rate, correct = correct, wrong = wrong, C = C))
 }
 
 tibrlsall <- function(lambda, y, na, nh) {
